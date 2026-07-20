@@ -1,94 +1,90 @@
+-- =========================================================
+-- SYSTEM: BINHSUBVIP PREMIUM HUB
+-- AUTHOR: binhsubvip
+-- UI FRAMEWORK: NIGHT UI (Bản Full/Backup)
+-- =========================================================
 
-local NightUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/binhsubvip/vlxx/main/VLXX.lua"))()
+-- 1. Load thư viện NightUI từ nguồn Backup ổn định
+local NightUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/BocusLuke/UI/main/NightUI.lua"))()
 
+-- 2. Khởi tạo Cửa sổ chính (Tùy chỉnh tên của bạn)
 local Window = NightUI:MakeWindow({
-    Name = "Binhsubvip Premium Hub",
+    Name = "Binhsubvip Hub - Version 1.0",
     Theme = "Dark" 
 })
 
-local TabServer = Window:MakeTab("Server Hop")
+-- 3. Khởi tạo các Tab chức năng
+local MainTab = Window:MakeTab("Chính (Main)")
+local ServerTab = Window:MakeTab("Máy Chủ (Server)")
+local PlayerTab = Window:MakeTab("Nhân Vật (Player)")
 
+-- =========================================================
+-- CHỨC NĂNG CỦA NIGHT UI (DROPDOWN, TOGGLE, SLIDER)
+-- =========================================================
+MainTab:MakeToggle({
+    Name = "Bật Auto Farm",
+    Default = false,
+    Callback = function(Value)
+        _G.AutoFarm = Value
+        print("Trạng thái Auto Farm: ", Value)
+    end
+})
 
-TabServer:MakeButton({
-    Name = "Chuyển Server Nhanh",
+MainTab:MakeDropdown({
+    Name = "Chọn Vũ Khí Farm",
+    Options = {"Melee", "Sword", "Blox Fruit"},
+    Default = "Melee",
+    Callback = function(Value)
+        _G.Weapon = Value
+    end
+})
+
+-- =========================================================
+-- CHỨC NĂNG LÕI: SERVER HOP (Vượt Ping)
+-- =========================================================
+ServerTab:MakeButton({
+    Name = "Tự động nhảy Server trống (Hop)",
     Callback = function()
-        local PlaceID = game.PlaceId
-        local AllIDs = {}
-        local foundAnything = ""
-        local actualHour = os.date("!*t").hour
-        local Deleted = false
+        local HttpService = game:GetService("HttpService")
+        local TeleportService = game:GetService("TeleportService")
+        local LocalPlayer = game:GetService("Players").LocalPlayer
         
-
-        local File = pcall(function()
-            AllIDs = game:GetService('HttpService'):JSONDecode(readfile("NotSameServers.json"))
-        end)
-        if not File then
-            table.insert(AllIDs, actualHour)
-            writefile("NotSameServers.json", game:GetService('HttpService'):JSONEncode(AllIDs))
-        end
+        local ApiUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
         
-
-        local function TPReturner()
-            local Site;
-            if foundAnything == "" then
-                Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100'))
-            else
-                Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
-            end
-            
-            local ID = ""
-            if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
-                foundAnything = Site.nextPageCursor
-            end
-            
-            local num = 0;
-            for i,v in pairs(Site.data) do
-                local Possible = true
-                ID = tostring(v.id)
-                if tonumber(v.maxPlayers) > tonumber(v.playing) then
-                    for _,Existing in pairs(AllIDs) do
-                        if num ~= 0 then
-                            if ID == tostring(Existing) then
-                                Possible = false
-                            end
-                        else
-                            if tonumber(actualHour) ~= tonumber(Existing) then
-                                local delFile = pcall(function()
-                                    delfile("NotSameServers.json")
-                                    AllIDs = {}
-                                    table.insert(AllIDs, actualHour)
-                                end)
-                            end
-                        end
-                        num = num + 1
-                    end
-                    if Possible == true then
-                        table.insert(AllIDs, ID)
-                        task.wait()
-                        pcall(function()
-                            writefile("NotSameServers.json", game:GetService('HttpService'):JSONEncode(AllIDs))
-                            task.wait()
-                            game:GetService("TeleportService"):TeleportToPlaceInstance(PlaceID, ID, game.Players.LocalPlayer)
-                        end)
-                        task.wait(4)
+        local success, response = pcall(function() return game:HttpGet(ApiUrl) end)
+        
+        if success then
+            local data = HttpService:JSONDecode(response)
+            if data and data.data then
+                for _, server in ipairs(data.data) do
+                    -- Tìm server chưa full người và ping thấp
+                    if server.id ~= game.JobId and server.playing < server.maxPlayers and server.ping < 150 then
+                        print("[*] Đang chuyển sang Server: " .. server.id)
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+                        task.wait(2) 
                     end
                 end
             end
         end
-        
-        -- Vòng lặp tìm kiếm
-        local function Teleport()
-            while task.wait() do
-                pcall(function()
-                    TPReturner()
-                    if foundAnything ~= "" then
-                        TPReturner()
-                    end
-                end)
-            end
-        end
-        
-        print("[*] Binhsubvip Hub: Khởi động trình tìm kiếm Server...")
-        Teleport()
+    end
+})
+
+ServerTab:MakeButton({
+    Name = "Vào lại máy chủ (Rejoin)",
+    Callback = function()
+        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, game:GetService("Players").LocalPlayer)
+    end
+})
+
+-- =========================================================
+-- CHỨC NĂNG: NGƯỜI CHƠI
+-- =========================================================
+PlayerTab:MakeSlider({
+    Name = "Tốc độ chạy",
+    Min = 16,
+    Max = 300,
+    Default = 16,
+    Callback = function(Value)
+        game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = Value
     end
 })
