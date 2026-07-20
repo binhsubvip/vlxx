@@ -1,69 +1,94 @@
 
-local ui_url = "https://raw.githubusercontent.com/binhsubvip/vlxx/main/VLXX.lua"
-local NightUI = loadstring(game:HttpGet(ui_url))()
-
+local NightUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/binhsubvip/vlxx/main/VLXX.lua"))()
 
 local Window = NightUI:MakeWindow({
-    Name = "Binhsubvip Hub - V1.0",
+    Name = "Binhsubvip Premium Hub",
     Theme = "Dark" 
 })
 
+local TabServer = Window:MakeTab("Server Hop")
 
-local TabServer = Window:MakeTab("Máy Chủ (Server)")
-local TabFarm = Window:MakeTab("Tính Năng (Farm)")
 
 TabServer:MakeButton({
-    Name = "Tự động nhảy Server trống",
+    Name = "Chuyển Server Nhanh",
     Callback = function()
-        local HttpService = game:GetService("HttpService")
-        local TeleportService = game:GetService("TeleportService")
-        local LocalPlayer = game:GetService("Players").LocalPlayer
+        local PlaceID = game.PlaceId
+        local AllIDs = {}
+        local foundAnything = ""
+        local actualHour = os.date("!*t").hour
+        local Deleted = false
         
-        local ApiUrl = "https://games.roblox.com/v1/games/" .. tostring(game.PlaceId) .. "/servers/Public?sortOrder=Asc&limit=100"
+
+        local File = pcall(function()
+            AllIDs = game:GetService('HttpService'):JSONDecode(readfile("NotSameServers.json"))
+        end)
+        if not File then
+            table.insert(AllIDs, actualHour)
+            writefile("NotSameServers.json", game:GetService('HttpService'):JSONEncode(AllIDs))
+        end
         
-        local success, response = pcall(function() return game:HttpGet(ApiUrl) end)
-        
-        if success then
-            local data = HttpService:JSONDecode(response)
-            if data and data.data then
-                for _, server in ipairs(data.data) do
-                    -- Tìm server chưa full và ping < 150
-                    if server.id ~= game.JobId and server.playing < server.maxPlayers and server.ping < 150 then
-                        print("[*] Đang chuyển sang Server: " .. server.id)
-                        TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
-                        task.wait(2) 
+
+        local function TPReturner()
+            local Site;
+            if foundAnything == "" then
+                Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100'))
+            else
+                Site = game.HttpService:JSONDecode(game:HttpGet('https://games.roblox.com/v1/games/' .. PlaceID .. '/servers/Public?sortOrder=Asc&limit=100&cursor=' .. foundAnything))
+            end
+            
+            local ID = ""
+            if Site.nextPageCursor and Site.nextPageCursor ~= "null" and Site.nextPageCursor ~= nil then
+                foundAnything = Site.nextPageCursor
+            end
+            
+            local num = 0;
+            for i,v in pairs(Site.data) do
+                local Possible = true
+                ID = tostring(v.id)
+                if tonumber(v.maxPlayers) > tonumber(v.playing) then
+                    for _,Existing in pairs(AllIDs) do
+                        if num ~= 0 then
+                            if ID == tostring(Existing) then
+                                Possible = false
+                            end
+                        else
+                            if tonumber(actualHour) ~= tonumber(Existing) then
+                                local delFile = pcall(function()
+                                    delfile("NotSameServers.json")
+                                    AllIDs = {}
+                                    table.insert(AllIDs, actualHour)
+                                end)
+                            end
+                        end
+                        num = num + 1
+                    end
+                    if Possible == true then
+                        table.insert(AllIDs, ID)
+                        task.wait()
+                        pcall(function()
+                            writefile("NotSameServers.json", game:GetService('HttpService'):JSONEncode(AllIDs))
+                            task.wait()
+                            game:GetService("TeleportService"):TeleportToPlaceInstance(PlaceID, ID, game.Players.LocalPlayer)
+                        end)
+                        task.wait(4)
                     end
                 end
             end
         end
-    end
-})
-
-TabServer:MakeButton({
-    Name = "Rejoin (Vào lại máy chủ này)",
-    Callback = function()
-        game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, game:GetService("Players").LocalPlayer)
-    end
-})
-
-TabFarm:MakeToggle({
-    Name = "Bật Auto Farm (Demo)",
-    Default = false,
-    Callback = function(Value)
-        _G.AutoFarm = Value
-        while _G.AutoFarm do
-            task.wait(1)
-
+        
+        -- Vòng lặp tìm kiếm
+        local function Teleport()
+            while task.wait() do
+                pcall(function()
+                    TPReturner()
+                    if foundAnything ~= "" then
+                        TPReturner()
+                    end
+                end)
+            end
         end
-    end
-})
-
-TabFarm:MakeSlider({
-    Name = "Chỉnh Tốc Độ Chạy",
-    Min = 16,
-    Max = 300,
-    Default = 16,
-    Callback = function(Value)
-        game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = Value
+        
+        print("[*] Binhsubvip Hub: Khởi động trình tìm kiếm Server...")
+        Teleport()
     end
 })
